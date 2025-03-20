@@ -311,25 +311,14 @@ void loop() {
             // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
             // and a content-type so the client knows what's coming, then a blank line:
             client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html; charset=UTF-8");
+            client.println("Content-type:application/json; charset=UTF-8");
             client.println();
 
             // Pulse the LED to show a connection has been made
             digitalWrite(LED_BUILTIN, HIGH);
 
-            // Send Prometheus data
-            client.print("# HELP ambient_temperature Ambient temperature\n");
-            client.print("# TYPE ambient_temperature gauge\n");
-            client.print((String)"ambient_temperature " + temperature + "\n");
-            client.print("# HELP ambient_humidity Ambient humidity\n");
-            client.print("# TYPE ambient_humidity gauge\n");
-            client.print((String)"ambient_humidity " + humidity + "\n");
-            client.print("# HELP co2 CO2\n");
-            client.print("# TYPE co2 gauge\n");
-            client.print((String)"co2 " + co2 + "\n");
-            client.print("# HELP battery_voltage Battery voltage\n");
-            client.print("# TYPE battery_voltage gauge\n");
-            client.print((String)"battery_voltage " + voltage + "\n");
+            // Send JSON data
+            client.print((String)"{\"temperature\": "+temperature+",\"humidity\":"+humidity+",\"co2:\""+co2+"}\n");
 
             digitalWrite(LED_BUILTIN, LOW);
 

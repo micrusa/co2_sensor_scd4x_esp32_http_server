@@ -27,8 +27,8 @@
 #include "secrets.h"
 
 // Uncomment which sensor you're using
-#define USESCD30
-// #define USESCD4X
+// #define USESCD30
+#define USESCD4X
 
 // If on an ESP32-C3 set this
 // int LED_BUILTIN = 13;

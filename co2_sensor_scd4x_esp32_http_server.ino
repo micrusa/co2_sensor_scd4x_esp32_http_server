@@ -30,40 +30,13 @@
 // #define USESCD30
 #define USESCD4X
 
-// If on an ESP32-C3 set this
-// int LED_BUILTIN = 13;
+int LED_BUILTIN = 13;
 
 // Task scheduler
 #include <TaskScheduler.h>
 void readSensorCallback();
 Task readSensorTask(5000, -1, &readSensorCallback);  // Read sensor every 5 seconds
 Scheduler runner;
-
-// BLE
-#include "DataProvider.h"
-#include "NimBLELibraryWrapper.h"
-#include "Sensirion_Gadget_BLE.h"
-NimBLELibraryWrapper lib;
-
-#ifdef USESCD30
-  // SCD30
-  DataProvider provider(lib, DataType::T_RH_CO2_ALT);
-#endif
-#ifdef USESCD4X
-  // SCD4X
-  DataProvider provider(lib, DataType::T_RH_CO2);
-#endif
-
-#ifdef USESCD30
-  // SCD30 sensor init
-  #include <SensirionI2cScd30.h>
-  SensirionI2cScd30 sensor;
-#endif
-#ifdef USESCD4X
-  // SCD4X sensor init
-  #include <SensirionI2CScd4x.h>
-  SensirionI2CScd4x sensor;
-#endif
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -131,13 +104,6 @@ void readSensorCallback() {
         printToSerial("");
     }
 #endif
-
-    // Report sensor readings via BLE
-    provider.writeValueToCurrentSample(co2, SignalType::CO2_PARTS_PER_MILLION);
-    provider.writeValueToCurrentSample(temperature, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-    provider.writeValueToCurrentSample(humidity, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-    provider.commitSample();
-    provider.handleDownload();
 
     // Pulse blue LED
     digitalWrite(LED_BUILTIN, HIGH);
@@ -246,21 +212,12 @@ void setup() {
     runner.addTask(readSensorTask);
     runner.enableAll();
 
-    // Setup BLE
-    provider.begin();
-    printToSerial("Sensirion BLE Lib initialized with deviceId: " + provider.getDeviceIdString());
-
     // WiFi setup
     digitalWrite(LED_BUILTIN, HIGH);
     delay(500);
     digitalWrite(LED_BUILTIN, LOW);
 
     delay(10);
-
-    // Set WiFi power
-    // Max: WIFI_POWER_19_5dBm ~150mA
-    // Min: WIFI_POWER_MINUS_1dBm ~120mA
-    // WiFi.setTxPower(WIFI_POWER_2dBm);
 
     // We start by connecting to a WiFi network
     printToSerial((String)"Connecting to " + ssid);
@@ -302,7 +259,6 @@ void loop() {
     while (client.connected()) {            // loop while the client's connected
       if (client.available()) {             // if there's bytes to read from the client,
         char c = client.read();             // read a byte, then
-        // printToSerial("" + c);                    // print it out the serial monitor
         if (c == '\n') {                    // if the byte is a newline character
 
           // if the current line is blank, you got two newline characters in a row.
@@ -318,7 +274,7 @@ void loop() {
             digitalWrite(LED_BUILTIN, HIGH);
 
             // Send JSON data
-            client.print((String)"{\"temperature\": "+temperature+",\"humidity\":"+humidity+",\"co2:\""+co2+"}\n");
+            client.print((String)"{\"temperature\": "+temperature+",\"humidity\":"+humidity+",\"co2\": "+co2+"}\n");
 
             digitalWrite(LED_BUILTIN, LOW);
 

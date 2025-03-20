@@ -1,36 +1,10 @@
-/*
- Arduino ESP32 WiFi Web Server for the Adafruit SCD4X and SCD30 CO2 sensors.
- Responds to http requests with prometheus.io syntax responses.
-
- # HELP ambient_temperature Ambient temperature
- # TYPE ambient_temperature gauge
- ambient_temperature 31.52
- # HELP ambient_humidity Ambient humidity
- # TYPE ambient_humidity gauge
- ambient_humidity 52.83
- # HELP co2 CO2
- # TYPE co2 gauge
- co2 670
- # HELP battery_voltage Battery voltage
- # TYPE battery_voltage gauge
- battery_voltage 3.15
-
- Based on:
- * ESP32 example code SimpleWiFiServer by Jan Hendrik Berlin
- * Sensirion I2C SCD4X/SCD30 example code exampleUsage Copyright (c) 2021, Sensirion AG
- * Sensirion Example8_SCD4x_BLE_Gadget_with_RHT
- * Sensirion Example2_SCD30_BLE_Gadget
-
- Written by Simon Loffler on invasion/survival day 26/1/2022
-*/
+#include <SensirionI2cScd4x.h>
 
 #include "secrets.h"
 
-// Uncomment which sensor you're using
-// #define USESCD30
-#define USESCD4X
-
-int LED_BUILTIN = 13;
+#define LED_PIN 13
+#define SDA_PIN 3
+#define SCL_PIN 4
 
 // Task scheduler
 #include <TaskScheduler.h>
@@ -44,14 +18,10 @@ Scheduler runner;
 uint16_t error;
 char errorMessage[256];
 
-#ifdef USESCD30
-  // SCD30
-  float co2;
-#endif
-#ifdef USESCD4X
-  // SCD4X
-  uint16_t co2;
-#endif
+SensirionI2cScd4x sensor;
+
+// SCD4X
+uint16_t co2;
 float temperature;
 float humidity;
 float voltage;
@@ -63,31 +33,6 @@ void readSensorCallback() {
     // printToSerial((String)"Analog read: " + sensorValue);
     // voltage = sensorValue * (4.2 / 3342.0);
 
-#ifdef USESCD30
-    // Read the SCD30 CO2 sensor
-    uint16_t data_ready = 0;
-    sensor.getDataReady(data_ready);
-    if (bool(data_ready)) {
-        error = sensor.readMeasurementData(co2, temperature, humidity);
-        if (error != NO_ERROR) {
-            Serial.print("Error trying to execute readMeasurementData(): ");
-            errorToString(error, errorMessage, sizeof errorMessage);
-            Serial.println(errorMessage);
-            return;
-        }
-        // Provide the sensor values for Tools -> Serial Monitor or Serial
-        // Plotter
-        Serial.print("CO2[ppm]:");
-        Serial.print(co2);
-        Serial.print("\t");
-        Serial.print("Temperature[℃]:");
-        Serial.print(temperature);
-        Serial.print("\t");
-        Serial.print("Humidity[%]:");
-        Serial.println(humidity);
-    }
-#endif
-#ifdef USESCD4X
     // Read the SCD4X CO2 sensor
     error = sensor.readMeasurement(co2, temperature, humidity);
     if (error) {
@@ -103,26 +48,10 @@ void readSensorCallback() {
         printToSerial((String)"Voltage: " + voltage);
         printToSerial("");
     }
-#endif
 
     // Pulse blue LED
-    digitalWrite(LED_BUILTIN, HIGH);
-    digitalWrite(LED_BUILTIN, LOW);
-}
-
-void printUint16Hex(uint16_t value) {
-    Serial.print(value < 4096 ? "0" : "");
-    Serial.print(value < 256 ? "0" : "");
-    Serial.print(value < 16 ? "0" : "");
-    Serial.print(value, HEX);
-}
-
-void printSerialNumber(uint16_t serial0, uint16_t serial1, uint16_t serial2) {
-    Serial.print("Serial: 0x");
-    printUint16Hex(serial0);
-    printUint16Hex(serial1);
-    printUint16Hex(serial2);
-    Serial.println();
+    digitalWrite(LED_PIN, HIGH);
+    digitalWrite(LED_PIN, LOW);
 }
 
 void printToSerial(String message) {
@@ -142,23 +71,17 @@ void setup() {
 
     Serial.begin(115200);
     delay(100);
+    printToSerial("Hello");
 
-    pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(LED_PIN, OUTPUT);
 
     // Sensor setup
-    Wire.begin();
+    Wire.begin(SCL_PIN, SDA_PIN);
 
     uint16_t error;
     char errorMessage[256];
 
-#ifdef USESCD30
-    // SCD30
-    sensor.begin(Wire, SCD30_I2C_ADDR_61);
-#endif
-#ifdef USESCD4X
-    // SCD4X
-    sensor.begin(Wire);
-#endif
+    sensor.begin(Wire, 0x62);
 
     // stop potentially previously started measurement
     error = sensor.stopPeriodicMeasurement();
@@ -167,37 +90,9 @@ void setup() {
       errorToString(error, errorMessage, 256);
       printToSerial(errorMessage);
     }
-#ifdef USESCD30
-    // SCD30
-    sensor.softReset();
-    sensor.activateAutoCalibration(1);
-#endif
 
-#ifdef USESCD4X
-    uint16_t serial0;
-    uint16_t serial1;
-    uint16_t serial2;
-    error = sensor.getSerialNumber(serial0, serial1, serial2);
-    if (error) {
-      printToSerial("Error trying to execute getSerialNumber(): ");
-      errorToString(error, errorMessage, 256);
-      printToSerial(errorMessage);
-    } else {
-      if (Serial) {
-        printSerialNumber(serial0, serial1, serial2);
-      }
-    }
-#endif
-
-    // Start Measurement
-#ifdef USESCD30
-    // SCD30
-    error = sensor.startPeriodicMeasurement(0);
-#endif
-#ifdef USESCD4X
     // SCD4X
     error = sensor.startPeriodicMeasurement();
-#endif
 
     if (error) {
       printToSerial("Error trying to execute startPeriodicMeasurement(): ");
@@ -213,9 +108,9 @@ void setup() {
     runner.enableAll();
 
     // WiFi setup
-    digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_PIN, HIGH);
     delay(500);
-    digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(LED_PIN, LOW);
 
     delay(10);
 
@@ -227,9 +122,9 @@ void setup() {
     // Wait for a WiFi connection for up to 10 seconds
     for (int i = 0; i < 10; i++) {
       if (WiFi.status() != WL_CONNECTED) {
-        digitalWrite(LED_BUILTIN, HIGH);
+        digitalWrite(LED_PIN, HIGH);
         delay(500);
-        digitalWrite(LED_BUILTIN, LOW);
+        digitalWrite(LED_PIN, LOW);
         printToSerial(".");
         delay(500);
       } else {
@@ -237,9 +132,9 @@ void setup() {
         printToSerial("IP address: ");
         printToSerial((String)WiFi.localIP());
 
-        digitalWrite(LED_BUILTIN, HIGH);
+        digitalWrite(LED_PIN, HIGH);
         delay(1000);
-        digitalWrite(LED_BUILTIN, LOW);
+        digitalWrite(LED_PIN, LOW);
         break;
       }
     }
@@ -271,12 +166,12 @@ void loop() {
             client.println();
 
             // Pulse the LED to show a connection has been made
-            digitalWrite(LED_BUILTIN, HIGH);
+            digitalWrite(LED_PIN, HIGH);
 
             // Send JSON data
             client.print((String)"{\"temperature\": "+temperature+",\"humidity\":"+humidity+",\"co2\": "+co2+"}\n");
 
-            digitalWrite(LED_BUILTIN, LOW);
+            digitalWrite(LED_PIN, LOW);
 
             // The HTTP response ends with another blank line:
             client.print("\n");

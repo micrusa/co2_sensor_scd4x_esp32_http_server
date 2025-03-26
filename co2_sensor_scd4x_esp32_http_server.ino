@@ -2,10 +2,6 @@
 
 #include "secrets.h"
 
-#define LED_PIN 13
-#define SDA_PIN 3
-#define SCL_PIN 4
-
 // Task scheduler
 #include <TaskScheduler.h>
 void readSensorCallback();
@@ -48,10 +44,6 @@ void readSensorCallback() {
         printToSerial((String)"Voltage: " + voltage);
         printToSerial("");
     }
-
-    // Pulse blue LED
-    digitalWrite(LED_PIN, HIGH);
-    digitalWrite(LED_PIN, LOW);
 }
 
 void printToSerial(String message) {
@@ -70,18 +62,23 @@ WiFiServer server(80);
 void setup() {
 
     Serial.begin(115200);
+    
+    while (!Serial && millis() < 2000);
+
     delay(100);
-    printToSerial("Hello");
 
-    pinMode(LED_PIN, OUTPUT);
-
+    printToSerial("Wire begin");
     // Sensor setup
-    Wire.begin(SCL_PIN, SDA_PIN);
+    Wire.begin();
+
+    printToSerial("Wire begun");
 
     uint16_t error;
     char errorMessage[256];
 
+    printToSerial("sensor begin");
     sensor.begin(Wire, 0x62);
+    printToSerial("Sensor begun");
 
     // stop potentially previously started measurement
     error = sensor.stopPeriodicMeasurement();
@@ -107,11 +104,6 @@ void setup() {
     runner.addTask(readSensorTask);
     runner.enableAll();
 
-    // WiFi setup
-    digitalWrite(LED_PIN, HIGH);
-    delay(500);
-    digitalWrite(LED_PIN, LOW);
-
     delay(10);
 
     // We start by connecting to a WiFi network
@@ -122,19 +114,12 @@ void setup() {
     // Wait for a WiFi connection for up to 10 seconds
     for (int i = 0; i < 10; i++) {
       if (WiFi.status() != WL_CONNECTED) {
-        digitalWrite(LED_PIN, HIGH);
-        delay(500);
-        digitalWrite(LED_PIN, LOW);
         printToSerial(".");
         delay(500);
       } else {
         printToSerial("WiFi connected.");
         printToSerial("IP address: ");
         printToSerial((String)WiFi.localIP());
-
-        digitalWrite(LED_PIN, HIGH);
-        delay(1000);
-        digitalWrite(LED_PIN, LOW);
         break;
       }
     }
@@ -165,13 +150,8 @@ void loop() {
             client.println("Content-type:application/json; charset=UTF-8");
             client.println();
 
-            // Pulse the LED to show a connection has been made
-            digitalWrite(LED_PIN, HIGH);
-
             // Send JSON data
             client.print((String)"{\"temperature\": "+temperature+",\"humidity\":"+humidity+",\"co2\": "+co2+"}\n");
-
-            digitalWrite(LED_PIN, LOW);
 
             // The HTTP response ends with another blank line:
             client.print("\n");
